@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<hemelbsettings version="3">
+  <!-- mesh ID = 1 -->
+  <simulation>
+    <step_length units="s" value="100"/>
+    <steps units="lattice" value="4500"/>
+    <stresstype value="1"/>
+    <voxel_size units="m" value="0.08"/>
+    <origin units="m" value="(0.0,0.0,0.0)"/>
+  </simulation>
+  <geometry>
+    <datafile path="fork.gmy"/>
+    <mapping path="scalingMap0to1.txt" value="1"/>
+  </geometry>
+  <initialconditions>
+    <pressure>
+      <uniform units="mmHg" value="0.0"/>
+    </pressure>
+  </initialconditions>
+  <monitoring>
+    <incompressibility/>
+  </monitoring>
+  <inlets>
+    <inlet>
+      <!-- index value = 0 -->
+      <condition type="velocity" subtype="parabolic">
+        <radius value="1.00159" units="m"/>
+        <maximum value="0.0" units="m/s"/>
+      </condition>
+      <normal units="dimensionless" value="(0.258819,-2.65275e-11,-0.965926)"/>
+      <position units="lattice" value="(15.0933,15.5199,186.543)"/>
+    </inlet>
+    <inlet>
+      <!-- index value = 1 -->
+      <condition type="velocity" subtype="parabolic">
+        <radius value="1.00159" units="m"/>
+        <maximum value="0.0" units="m/s"/>
+      </condition>
+      <normal units="dimensionless" value="(1.55642e-11,-2.8693e-11,-1)"/>
+      <position units="lattice" value="(47.4991,15.5199,190.809)"/>
+    </inlet>
+    <inlet>
+      <!-- index value = 2 -->
+      <condition type="velocity" subtype="parabolic">
+        <radius value="1.00159" units="m"/>
+        <maximum value="0.0" units="m/s"/>
+      </condition>
+      <normal units="dimensionless" value="(-0.258819,9.72957e-12,-0.965926)"/>
+      <position units="lattice" value="(79.9048,15.5199,186.543)"/>
+    </inlet>
+  </inlets>
+  <outlets>
+    <outlet>
+      <!-- index value = 0 -->
+      <condition subtype="cosine" type="pressure">
+        <amplitude units="mmHg" value="0.0"/>
+        <mean units="mmHg" value="0.0"/>
+        <phase units="rad" value="0.0"/>
+        <period units="s" value="1"/>
+      </condition>
+      <normal units="dimensionless" value="(1.2219e-11,-3.80214e-11,1)"/>
+      <position units="lattice" value="(47.4991,15.5199,3)"/>
+    </outlet>
+  </outlets>
+  <properties>
+    <propertyoutput file="coupled" period="100">
+      <geometry type="inlet"/>
+      <field type="coupled"/>
+    </propertyoutput>
+    <propertyoutput file="outlet.dat" period="100">
+      <geometry type="outlet"/>
+      <field type="velocity"/>
+      <field type="pressure"/>
+    </propertyoutput>
+    <propertyoutput file="inlet.dat" period="100">
+      <geometry type="inlet"/>
+      <field type="velocity"/>
+      <field type="pressure"/>
+    </propertyoutput>
+  </properties>
+</hemelbsettings>

@@ -1,0 +1,2 @@
+Map Indices: Aout (index, radius) then Paired Vin(s) (index, distance, radius) 
+(0,0.99996), ( 0,0.0,0.99996)
