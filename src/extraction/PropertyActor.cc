@@ -95,6 +95,11 @@ namespace hemelb
 			return propertyWriter->GetCoupledFields(simulationState.GetTimeStep(), ioComms.OnIORank(), coupledFields);
 		}
 
+		bool PropertyActor::GetCoupledFields(std::unordered_map<int, std::vector<double> >& coupledFieldsHere, std::unordered_map<int, std::vector<double> >& coupledFieldsThere) const
+		{
+			return propertyWriter->GetCoupledFields(simulationState.GetTimeStep(), ioComms.OnIORank(), coupledFieldsHere, coupledFieldsThere);
+		}
+
 		const std::unordered_map<int, std::vector<int> > PropertyActor::GetIoletMap() const
 		{
 			return propertyWriter->GetIoletMap();

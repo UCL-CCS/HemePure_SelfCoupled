@@ -354,6 +354,11 @@ namespace hemelb
 
 				int GetLocalRank() const;
 
+				inline const util::Vector3D<site_t>& GiveMeGlobalSiteCoords(site_t siteIndex) const
+				{
+					return globalSiteCoords[siteIndex];
+				}
+		
 			protected:
 				/**
 				 * The protected default constructor does nothing. It exists to allow derivation from this

@@ -48,6 +48,7 @@ namespace hemelb
 
 				// Brackets to ensure that the scalar multiplies are done before vector * scalar.
 				return normal * (max * (1. - rSq));
+			//	return normal * (max);
 			}
 
 			LatticeForceVector InOutLetParabolicVelocity::GetForceOnBoundary() const

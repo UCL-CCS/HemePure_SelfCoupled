@@ -544,9 +544,11 @@ namespace hemelb
 			if (coupling && couplingNow)
 			{
 				// Clear coupledFieldsThere to prepare for receipt of new fields from other HemePure instance.
+				coupledFieldsHere.clear();
 				coupledFieldsThere.clear();
 
 				for (unsigned outputNumberCoupled = 0; outputNumberCoupled < 2; ++outputNumberCoupled)
+				//for (unsigned outputNumberCoupled = 0; outputNumberCoupled < 1; ++outputNumberCoupled)//JM Test without communicating pressure-not used
 				{
 					if (comms.OnIORank())
 					{
@@ -589,7 +591,9 @@ namespace hemelb
 					// Split coupledFields to make it easier to send field.
 					if (comms.OnIORank())
 					{
-						for (proc_t rank = 0; rank < comms.Size(); rank++)
+						std::fill(coupledField.begin(),coupledField.end(),0.0);
+
+						/*for (proc_t rank = 0; rank < comms.Size(); rank++)
 						{
 							if (nCoupledLetsWorld[rank] > 0)
 							{
@@ -598,11 +602,25 @@ namespace hemelb
 										it != letMap[rank].end(); ++it)
 								{
 									// Note, indices of coupledField = IOlet indices.
-									coupledField[*it] =
+									coupledField[*it] +=
 										coupledFields.at(*it)[outputNumberCoupled]/
 										coupledFields.at(*it)[2];
+
+									//coupledFields.at(*it)[outputNumberCoupled] /= coupledFields.at(*it)[2]; 
+									//coupledFields.at(*it)[outputNumberCoupled] = coupledField[*it];
+
+									std::cout << "Rank " << rankUni << " from rank (" << rank << "): let " << *it << "(" << outputNumberCoupled << ") - " << coupledFields.at(*it)[outputNumberCoupled] << ", " << coupledFields.at(*it)[2] << " = " << coupledField[*it] << std::endl;
 								}
+
 							}
+						}*/
+
+						for (int i = 0; i<coupledField.size(); i++)
+						{
+							coupledField[i] = coupledFields.at(i)[outputNumberCoupled]/coupledFields.at(i)[2];
+							coupledFields.at(i)[outputNumberCoupled] = coupledField[i];
+							
+							//std::cout << "Rank " << rankUni << ": let " << i << "(" << outputNumberCoupled << ") - " << coupledFields.at(i)[outputNumberCoupled] << ", " << coupledFields.at(i)[2] << " = " << coupledField[i] << std::endl;
 						}
 
 						// Number of coupled IOlets in my world.
@@ -619,7 +637,7 @@ namespace hemelb
 									0, commsUni);
 							MPI_Recv(&nCoupledLetsThere,
 									1,
-									MPI_DOUBLE, comms.Size(),
+									MPI_INT, comms.Size(),
 									1, commsUni, MPI_STATUS_IGNORE);
 						}
 						else
@@ -633,7 +651,7 @@ namespace hemelb
 									MPI_INT, 0,
 									0, commsUni, MPI_STATUS_IGNORE);
 						}
-
+					
 						// Temporary vector to receive a coupled field.
 						std::vector<double> coupledFieldThere(nCoupledLetsThere);
 
@@ -661,6 +679,14 @@ namespace hemelb
 						for (int i = 0; i < nCoupledLetsThere; i++)
 						{
 							coupledFieldsThere[i].push_back(coupledFieldThere[i]);
+							//std::cout << "Received from There on rank " << rankUni << " - let " << i << "(" << outputNumberCoupled << "): " << coupledFieldThere[i] << std::endl;	
+						}
+
+						
+						for (int i = 0; i < nCoupledLetsHere; i++)
+						{
+							coupledFieldsHere[i].push_back(coupledField[i]);	
+							//std::cout << "Retained from Here on rank " << rankUni << " - let " << i << "(" << outputNumberCoupled << "): " << coupledField[i] << std::endl;	
 						}
 					}
 					//if (comms.OnIORank())

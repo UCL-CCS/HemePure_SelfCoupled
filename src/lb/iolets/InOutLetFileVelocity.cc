@@ -124,6 +124,8 @@ namespace hemelb
 					// get the max velocity
 					if (coupledMaxVelocity) {
 						max = maxSpeed;
+					        
+						//if(coupledMaxVelocity and t%100 == 0) { printf("Returning max of %e and maxSpeed of %e at non-weighted inlet \n", max, maxSpeed);}
 					} else {
 						max = velocityTable[t];
 					}
@@ -205,7 +207,7 @@ namespace hemelb
 						{
 							//v_tot = normal * weights_table.at(xyz) * velocityTable[t];
 							v_tot = normal * weights_table.at(xyz) * max;// / weightAve; //JM
-						//	if(coupledMaxVelocity and t%100 == 0) { printf("Returning max of %e and maxSpeed of %e and vtot of %e and weightAve of %e \n", max, maxSpeed, v_tot.z, weightAve);}
+					         	//if(coupledMaxVelocity and t%100 == 0) { printf("Returning max of %e and maxSpeed of %e and vtot of %e and weightAve of %e \n", max, maxSpeed, v_tot.z, weightAve);}
 							return v_tot;
 						}
 

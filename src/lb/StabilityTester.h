@@ -106,7 +106,11 @@ namespace hemelb
                 // Note that by testing for value > 0.0, we also catch stray NaNs.
                 if (! (value > 0.0))
                 {
-                  mUpwardsStability = Unstable;
+   		  std::cout << "Found instability at i= " << i << ", l= " << l << ", of " << value << std::endl;
+		  util::Vector3D<site_t> errorSite = mLatDat->GiveMeGlobalSiteCoords(i);
+		  std::cout << "Coords of this error is (" << errorSite.x << ", " << errorSite.y << ", " << errorSite.z << ")" << std::endl;
+
+		  mUpwardsStability = Unstable;
                   break;
                 }
               }

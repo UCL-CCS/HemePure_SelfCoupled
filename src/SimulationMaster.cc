@@ -285,6 +285,73 @@ void SimulationMaster::Initialise() {
 				couplingMap.push_back(vec);
 			}
 			file.close();
+
+			//JM Preliminary houskeeping and datastructures
+
+			// Get number of beds
+			nBeds = couplingMap.size()/2;
+
+			// Get number of inlets/outlest for each Bed
+			nOutlets.resize(nBeds);  //Lattice = 0
+			nInlets.resize(nBeds); //Lattice = 1
+			
+			inletVelocity.resize(nBeds);
+			outletPressure.resize(nBeds);
+		
+			Qbed.resize(nBeds);
+
+			UdA.resize(nBeds);
+			UdV.resize(nBeds);
+
+			UdAold.resize(nBeds);
+			UdVold.resize(nBeds);
+			
+			int cumInlets = 0;
+			int cumOutlets = 0;
+
+			for (int i = 0; i < nBeds; ++i)
+			{	
+				nOutlets[i] = (couplingMap[2*i].size() - 2)/3;
+				cumOutlets += (couplingMap[2*i].size() - 2)/3;
+				nInlets[i] = (couplingMap[2*i+1].size() - 2)/3;
+				cumInlets += (couplingMap[2*i+1].size() - 2)/3;
+
+				inletVelocity[i].resize(nInlets[i]);
+				outletPressure[i].resize(nOutlets[i]);
+			}
+
+			inletBedOrder.resize(cumInlets);
+			inletOrder.resize(cumInlets);
+			inletTotalOrder.resize(cumInlets);
+			outletBedOrder.resize(cumOutlets);
+			outletOrder.resize(cumOutlets);
+			outletTotalOrder.resize(cumOutlets);
+
+			int k=0, kk=0;
+
+			for (int i = 0; i < nBeds; ++i)
+			{
+				for (int j=0; j<nOutlets[i]; ++j)
+				{
+					//outletBedOrder[k] = i;
+					//outletOrder[k] = j;
+					outletBedOrder[stoi(couplingMap[2*i][3*j+2])] = stoi(couplingMap[2*i][0]);
+					outletOrder[stoi(couplingMap[2*i][3*j+2])] = j;
+					//outletTotalOrder[k] = stoi(couplingMap[3*i][3*j+2]);
+					k+=1;
+					
+				}
+				
+				for (int j=0; j<nInlets[i]; ++j)
+				{
+					//inletBedOrder[kk] = i;
+					//inletOrder[kk] = j;
+					inletBedOrder[stoi(couplingMap[2*i+1][3*j+2])] = stoi(couplingMap[2*i+1][0]);
+					inletOrder[stoi(couplingMap[2*i+1][3*j+2])] = j;
+					//inletTotalOrder[kk] = stoi(couplingMap[3*i+1][3*j+2]);
+					kk+=1;
+				}
+			}
 		}
 	}
 
@@ -424,218 +491,272 @@ void SimulationMaster::DoTimeStep() {
 	// Coupling HemePure instances.
 	if (simulationState->GetTimeStep() > 1 && propertyExtractor != NULL) {
 
+		// Get coupledFieldsHere from current HemePure instance.
+		std::unordered_map<int, std::vector<double> > coupledFieldsHere;
 		// Get coupledFieldsThere from other HemePure instance.
 		std::unordered_map<int, std::vector<double> > coupledFieldsThere;
-		bool coupling = propertyExtractor->GetCoupledFields(coupledFieldsThere);
+		bool coupling = propertyExtractor->GetCoupledFields(coupledFieldsHere,coupledFieldsThere);
 
 		if (coupling)
 		{
-			// Get number of outlets	on lattice with ID = 0.
-			int nOutlets = couplingMap.size();
-
-			// Get number of inlets		on lattice with ID = 1.
-			std::vector<int> nInlets(nOutlets);
-			int cumInlets = 0;
-			for (int i = 0; i < nOutlets; ++i)
-			{	
-				nInlets[i] = (couplingMap[i].size() - 3)/3;
-				cumInlets += (couplingMap[i].size() - 3)/3;
-			}
-
-			std::vector<int> inletOrder(cumInlets);
-			std::vector<int> outletOrder(cumInlets);
-
-			// outletLatticeID outletID inletLatticeID (inletID velocityScaleFactor pressureScaleFactor)
-		
-			std::vector<std::vector<double> > inletVelocity(nOutlets);
-			std::vector<std::vector<double> > inletPressure(nOutlets);
-			std::vector<std::vector<double> > inletLBMPressure(nOutlets);
-			std::vector<std::vector<double> > outletVelocity(nOutlets);
-			std::vector<std::vector<double> > outletPressure(nOutlets);
-			std::vector<std::vector<double> > outletLBMPressure(nOutlets);
+			double tmpVel, tmpVel1, tmpVel2;
+			int iolet;
+			int k=0;
+			int kk=0;
 			
-			if ((simulationState->GetTimeStep()/simConfig->GetPropertyOutput(0)->frequency)%2 == 1) //JM to oscillate velocity/pressure transfer - ASSUMES coupling is first property
+			if (IsCurrentProcTheIOProc() && (simulationState->GetTimeStep()%simConfig->GetPropertyOutput(0)->frequency) == 0)
+			{
+				std::cout <<std::endl;
+				for (int i=0; i<nBeds; ++i)
+				{
+					//std::cout << "Step " << simulationState->GetTimeStep() << " Mesh " << simConfig->GetLatticeId() << " Bed " << i << ": UdA " << UdA[i] << ", UdV " << UdV[i] << std::endl;
+					std::cout << "Step " << simulationState->GetTimeStep() << " Mesh " << simConfig->GetLatticeId() << " Bed " << i << ": UdA " << UdA[i] << ", UdAold " << UdAold[i] << ", UdV " << UdV[i] << ", UdVold " << UdVold[i] << std::endl;
+					
+				/*	if (simConfig->GetLatticeId()==0)
+					{
+						for (int j = 0; j < nInlets[i]; ++j)
+						{	
+							// Global IOlet ID.
+							iolet = stoi(couplingMap[3*i+1][3*j+2]);
+						
+							std::cout << "Mesh 0 Step " << simulationState->GetTimeStep() << ", inlet " << iolet << " " << coupledFieldsThere.at(iolet)[0] << std::endl;		
+						}
+					}
+					else
+					{
+						for (int j = 0; j < nInlets[i]; ++j)
+						{	
+							// Global IOlet ID.
+							iolet = stoi(couplingMap[3*i+1][3*j+2]);
+						
+							std::cout << "Mesh 1 Step " << simulationState->GetTimeStep() << ", inlet " << iolet << " " << coupledFieldsHere.at(iolet)[0] << std::endl;		
+						}
+					}*/ 
+
+				}
+			}
+		
+			if (simConfig->GetLatticeId()==0 && (simulationState->GetTimeStep()/simConfig->GetPropertyOutput(0)->frequency)%2 == 1) //JM to oscillate velocity/pressure transfer - ASSUMES coupling is first property
 			{
 				// Pressure transfer from mesh 1 to mesh 0
-				if (IsCurrentProcTheIOProc() && simConfig->GetLatticeId() == 0)
-				{
-
+				if (IsCurrentProcTheIOProc())
+				{	
+					//std::cout << "coupling housekeeping at Step " << simulationState->GetTimeStep() << " on mesh 0" << std::endl;
 					// ONLY FOR GOOD FOR 2 MESHES!
-					int k=0;
-					for (int i = 0; i < nOutlets; ++i)
+					for (int i = 0; i < nBeds; ++i)
 					{
-						double tmpVelocity = 0;
-						double tmpPressure = 0;
-						
-						outletOrder[k] = i;
-						k +=1;
-						
-						for (int j = 0; j < nInlets[i]; ++j)
+						//Calc Udv and Uda
+						//Calc d(Uda)/dt
+						//get qA_i for each inlet
+						tmpVel1 = 0;
+						tmpVel2 = 0;
+				
+						for (int j = 0; j < nOutlets[i]; ++j)
 						{
 							// Global IOlet ID.
-							int iolet = stoi(couplingMap[i][3*j+3]);
-							
+							iolet = stoi(couplingMap[2*i][3*j+2]);
+
 							// Voutlet = Vinlet/scaleFactor
-							tmpVelocity += coupledFieldsThere.at(iolet)[0]/stod(couplingMap[i][3*j+4]);
-																					
-							// Poutlet = Pinlet/ (1.0 - scaleFactor)
-							//tmpPressure += coupledFieldsThere.at(iolet)[1]/(1.0 - stod(couplingMap[i][3*j+5]));
+							tmpVel1 += coupledFieldsHere.at(iolet)[0]/stod(couplingMap[2*i][3*j+3]);
+							
+						
+							//std::cout << "Mesh 0 Step " << simulationState->GetTimeStep() << ", outlet " << iolet << " " << coupledFieldsHere.at(iolet)[0] << std::endl;		
 						}
+						UdAold[i] = UdA[i];
+				        	UdA[i] = tmpVel1/nOutlets[i];
+					
+						tmpVel1 = 0;
+						tmpVel2 = 0;
+
+						for (int j = 0; j < nInlets[i]; ++j)
+						{	
+							// Global IOlet ID.
+							iolet = stoi(couplingMap[2*i+1][3*j+2]);
+
+							// Voutlet = Vinlet/scaleFactor
+							tmpVel1 += coupledFieldsThere.at(iolet)[0]/stod(couplingMap[2*i+1][3*j+3]);
 							
-						// Voutlet = Vinlet/scaleFactor
-						//outletVelocity[i].push_back(tmpVelocity/nInlets[i]);
 							
-						// Poutlet = Pinlet/ (1.0 - scaleFactor)
-						//outletLBMPressure[i].push_back(tmpPressure/nInlets[i]); //JM original option that uses local LBM pressure values
-						outletPressure[i].push_back(0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*tmpVelocity*tmpVelocity/(nInlets[i]*nInlets[i])); //JM option that uses dynamic pressure based on velocity
+							//std::cout << "Mesh 0 Step " << simulationState->GetTimeStep() << ", inlet " << iolet << " " << coupledFieldsThere.at(iolet)[0] << std::endl;		
+						}
+						UdVold[i] = UdV[i];
+						UdV[i] = tmpVel1/nInlets[i];
+						
+				
+					}
+			
+					//std::cout << "Mesh housekeeping at Step " << simulationState->GetTimeStep() << " on " << simConfig->GetLatticeId() << std::endl;
+					for (int i = 0; i < nBeds; ++i)
+					{
+						for (int j = 0; j < nOutlets[i]; ++j)
+						{ 
+							// Global IOlet ID.
+							iolet = stoi(couplingMap[2*i][3*j+2]);
+					   		//std::cout << "Outlet: " << iolet << std::endl;		
+					   	
+						
+							tmpVel = UdV[i]*stod(couplingMap[2*i][3*j+3])*stod(couplingMap[2*i][3*j+4]); 	
+
+							outletPressure[i][j] = 0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*tmpVel*tmpVel;
+							
+							
+							std::cout << "0: Storing: Bed " << i << ", let " << iolet << ", pressure " << outletPressure[i][j] << "(vel = " << tmpVel << std::endl;
+						}
+					
 						
 					}
-				}
-
-				if (simConfig->GetLatticeId() == 0)
-				{
-					if (IsCurrentProcTheIOProc())
+					
+					for (std::unordered_map<int, std::vector<int> >::iterator it1 = iolet2RankMap.begin();
+							it1 != iolet2RankMap.end(); ++it1)
 					{
-						// ONLY FOR GOOD FOR 2 MESHES!
-						for (int i = 0; i < nOutlets; ++i)
+						for (std::vector<int>::iterator it2 = it1->second.begin();
+								it2 != it1->second.end(); ++it2)
 						{
-							for (std::unordered_map<int, std::vector<int> >::iterator it1 = iolet2RankMap.begin();
-									it1 != iolet2RankMap.end(); ++it1)
-							{
-								for (std::vector<int>::iterator it2 = it1->second.begin();
-										it2 != it1->second.end(); ++it2)
-								{
-									// Send IOlet index first.
-									ioComms.Send(it1->first, *it2);
-									// Send pressure for this IOlet.
-									ioComms.Send(outletPressure[outletOrder[it1->first]][0], *it2);
-									// Send LBM pressure for this IOlet.
-									//ioComms.Send(outletLBMPressure[outletOrder[it1->first]][0], *it2);
-									// Send Velocity for this IOlet.
-									//ioComms.Send(outletVelocity[outletOrder[it1->first]][0], *it2);
-								}
-							}
-						}
-					}
-					else
-					{
-						double tmp_pressure, tmp_LBMpressure, tmp_Velocity; int tmp_iolet;
-						for (std::vector<int>::iterator it = rank2IoletMap.at(-1).begin();
-								it != rank2IoletMap.at(-1).end(); ++it)
-						{
-							// Receive IOlet index first.
-							ioComms.Receive(tmp_iolet,ioComms.GetIORank());
-							// Receive pressure for this IOlet.
-							ioComms.Receive(tmp_pressure,ioComms.GetIORank());
-							// Receive LBM pressure for this IOlet.
-							//ioComms.Receive(tmp_LBMpressure,ioComms.GetIORank());
-							// Receive Velocity for this IOlet.
-							//ioComms.Receive(tmp_Velocity,ioComms.GetIORank());
-							//tmp_iolet = 0; tmp_velocity = sin(simulationState->GetTimeStep());
+							// Send IOlet index first.
+							ioComms.Send(it1->first, *it2);					
+							//ioComms.Send(outletTotalOrder[it1->first], *it2);					
+							// Send pressure for this IOlet.
+							ioComms.Send(outletPressure[outletBedOrder[it1->first]][outletOrder[it1->first]], *it2);
 							
-							((hemelb::lb::iolets::InOutLetCosine*)outletValues->GetLocalIolet(tmp_iolet))->SetForce(outletValues->GetLocalIolet(tmp_iolet)->GetNormal()*unitConverter->ConvertPressureDifferenceToLatticeUnits(tmp_pressure)*unitConverter->GetVoxelSize()); //Dynamic pressure; tmp_pressure*area_dot_normal*dx==forceDensityvector);
+							//std::cout << "Sending to itfirst" << it1->first << ": Bed " << outletBedOrder[it1->first] << ", let " << outletOrder[it1->first] << ", pressure " << outletPressure[outletBedOrder[it1->first]][outletOrder[it1->first]] << std::endl;
 						}
 					}
-					//if (IsCurrentProcTheIOProc())
-					//{
-					//	int i = 0;
-					//	char hostname[256];
-					//	gethostname(hostname, sizeof(hostname));
-					//	printf("PID %d (%d) on %s ready for attach\n", getpid(), 1, hostname);
-					//	fflush(stdout);
-					//	while (0 == i)
-					//		sleep(5);
-					//}
-			
+				}
+				else
+				{
+				
+					double tmp_pressure; int tmp_iolet;
+					for (std::vector<int>::iterator it = rank2IoletMap.at(-1).begin();
+							it != rank2IoletMap.at(-1).end(); ++it)
+					{
+						// Receive IOlet index first.
+						ioComms.Receive(tmp_iolet,ioComms.GetIORank());
+						// Receive pressure for this IOlet.
+						ioComms.Receive(tmp_pressure,ioComms.GetIORank());
+						//std::cout << "Received iolet " << tmp_iolet << ", pressure " << tmp_pressure << std::endl;
+
+						((hemelb::lb::iolets::InOutLetCosine*)outletValues->GetLocalIolet(tmp_iolet))->SetForce(outletValues->GetLocalIolet(tmp_iolet)->GetNormal()*unitConverter->ConvertPressureDifferenceToLatticeUnits(tmp_pressure)*unitConverter->GetVoxelSize()); //Dynamic pressure; tmp_pressure*area_dot_normal*dx==forceDensityvector);
+						
+					}
 				}
 			}
 		
-			if ((simulationState->GetTimeStep()/simConfig->GetPropertyOutput(0)->frequency)%2 == 0) //JM to oscillate pressure/velocity transfer - ASSUMES coupling is first property
+			if (simConfig->GetLatticeId()==1 && (simulationState->GetTimeStep()/simConfig->GetPropertyOutput(0)->frequency)%2 == 0) //JM to oscillate velocity/pressure transfer - ASSUMES coupling is first property
 			{
 				// Velocity transfer from mesh 0 to mesh 1
-				if (IsCurrentProcTheIOProc() && simConfig->GetLatticeId() == 1)
-				{
-
+				if (IsCurrentProcTheIOProc())
+				{	
+					//std::cout << "coupling housekeeping at Step " << simulationState->GetTimeStep() << " on mesh 1" << std::endl;
 					// ONLY FOR GOOD FOR 2 MESHES!
-					int k=0;
-					for (int i = 0; i < nOutlets; ++i)
+					for (int i = 0; i < nBeds; ++i)
 					{
+						//Calc Udv and Uda
+						//Calc d(Uda)/dt
+						//get qA_i for each inlet
+						tmpVel1 = 0;
+						tmpVel2 = 0;
+				
+						for (int j = 0; j < nOutlets[i]; ++j)
+						{
+							// Global IOlet ID.
+							iolet = stoi(couplingMap[2*i][3*j+2]);
+
+							// Calculation for datum velocity
+							tmpVel1 += coupledFieldsThere.at(iolet)[0]/stod(couplingMap[2*i][3*j+3]);
+							
+							//std::cout << "Mesh 1 Step " << simulationState->GetTimeStep() << ", outlet " << iolet << " " << coupledFieldsThere.at(iolet)[0] << std::endl;		
+						}
+						UdAold[i] = UdA[i];
+						UdA[i] = tmpVel1/nOutlets[i];
+									
+						tmpVel1 = 0;
+						tmpVel2 = 0;
+
+						for (int j = 0; j < nInlets[i]; ++j)
+						{
+						//	std::cout << "Mesh 1 Bed " <<  i << ", nInlet " << nInlets[i] << " inlet " << j << std::endl;		
+							// Global IOlet ID.
+							iolet = stoi(couplingMap[2*i+1][3*j+2]);
+
+							// Calculation for datum velocity
+							tmpVel1 += coupledFieldsHere.at(iolet)[0]/stod(couplingMap[2*i+1][3*j+3]);
+							
+							
+							//std::cout << "Mesh 1 Step " << simulationState->GetTimeStep() << ", inlet " << iolet << " " << coupledFieldsHere.at(iolet)[0] << std::endl;		
+
+						}
+						UdVold[i] = UdV[i];
+						UdV[i] = tmpVel1/nInlets[i];
+					}
+			
+					//std::cout << "Mesh housekeeping at Step " << simulationState->GetTimeStep() << " on " << simConfig->GetLatticeId() << std::endl;
+					
+					for (int i = 0; i < nBeds; ++i)
+					{	
 						for (int j = 0; j < nInlets[i]; ++j)
 						{
 							// Global IOlet ID.
-							int iolet = stoi(couplingMap[i][1]);
-							inletOrder[k] = j;
-							outletOrder[k] = i;
-							k +=1;
+							iolet = stoi(couplingMap[2*i+1][3*j+2]);
+							
+					   		//std::cout << "Inlet: " << iolet << " ij " << i << " " << j << "  at line " << 3*i+1 << " element " << 3*j+2 << std::endl;		
+					   		
+							// original error: inletVelocity[i][j] = (tmpVel1 - tmpVel2)/(stod(couplingMap[3*i+1][3*j+3])*stod(couplingMap[3*i+1][3*j+4]));						
+							inletVelocity[i][j] = UdA[i]*stod(couplingMap[2*i+1][3*j+3])*stod(couplingMap[2*i+1][3*j+4]);							
+							std::cout << "1: Storing: Bed " << i << ", iolet " << iolet << ", velocity " << inletVelocity[i][j] << std::endl;
+						}
 
-							// Vinlet = scaleFactor*Voutlet
-							inletVelocity[i].push_back(stod(couplingMap[i][3*j+4])*coupledFieldsThere.at(iolet)[0]);
+						
+					}
+				
+					for (std::unordered_map<int, std::vector<int> >::iterator it1 = iolet2RankMap.begin();
+							it1 != iolet2RankMap.end(); ++it1)
+					{
+						for (std::vector<int>::iterator it2 = it1->second.begin();
+								it2 != it1->second.end(); ++it2)
+						{				
+							//std::cout << "Sending to itfirst " << it1->first << ": Bed " << inletBedOrder[it1->first] << ", let " << inletOrder[it1->first] << ", velocity " << inletVelocity[inletBedOrder[it1->first]][inletOrder[it1->first]] << std::endl;
+							
+							// Send IOlet index first.
+							ioComms.Send(it1->first, *it2);	
+							//ioComms.Send(inletTotalOrder[it1->first], *it2);	
+							// Send velocity for this IOlet.
+							ioComms.Send(inletVelocity[inletBedOrder[it1->first]][inletOrder[it1->first]], *it2);
 
-							// Pinlet = Poutlet - scaleFactor*Poutlet = (1.0 - scaleFactor)*Poutlet
-							//inletLBMPressure[i].push_back((1.0 - stod(couplingMap[i][3*j+5]))*coupledFieldsThere.at(iolet)[1]);
-							//inletPressure[i].push_back(0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*stod(couplingMap[i][3*j+4])*coupledFieldsThere.at(iolet)[0]*stod(couplingMap[i][3*j+4])*coupledFieldsThere.at(iolet)[0]); //JM Dynamic pressure at inlet
+						//	std::cout << "Done sending to itfirst " << it1->first << std::endl;
+						}
+					}
 					
-						}
-					}
 				}
-
-				if (simConfig->GetLatticeId() == 1)
+				else
 				{
-					if (IsCurrentProcTheIOProc())
+					double tmp_velocity; int tmp_iolet;
+					for (std::vector<int>::iterator it = rank2IoletMap.at(-1).begin();
+							it != rank2IoletMap.at(-1).end(); ++it)
 					{
-						// ONLY FOR GOOD FOR 2 MESHES!
-						
-						for (std::unordered_map<int, std::vector<int> >::iterator it1 = iolet2RankMap.begin();
-								it1 != iolet2RankMap.end(); ++it1)
-						{
-							for (std::vector<int>::iterator it2 = it1->second.begin();
-									it2 != it1->second.end(); ++it2)
-							{
-							
-								// Send IOlet index first.
-								ioComms.Send(it1->first, *it2);
-								// Send velocity for this IOlet.
-								ioComms.Send(inletVelocity[outletOrder[it1->first]][inletOrder[it1->first]], *it2);
-								// Send pressure for this IOlet.
-								//ioComms.Send(inletLBMPressure[outletOrder[it1->first]][inletOrder[it1->first]], *it2);
-							}
-						}
-						
-					}
-					else
-					{
-						double tmp_velocity, tmp_pressure; int tmp_iolet;
-						for (std::vector<int>::iterator it = rank2IoletMap.at(-1).begin();
-								it != rank2IoletMap.at(-1).end(); ++it)
-						{
-							// Receive IOlet index first.
-							ioComms.Receive(tmp_iolet,ioComms.GetIORank());
-							// Receive velocity for this IOlet.
-							ioComms.Receive(tmp_velocity,ioComms.GetIORank());
-							// Receive velocity for this IOlet.
-							//ioComms.Receive(tmp_pressure,ioComms.GetIORank());
-							
-						
+						// Receive IOlet index first.
+						ioComms.Receive(tmp_iolet,ioComms.GetIORank());
+						// Receive velocity for this IOlet.
+						ioComms.Receive(tmp_velocity,ioComms.GetIORank());
+
+						//std::cout << "Received iolet " << tmp_iolet << ", velocity " << tmp_velocity << std::endl;
+
 #ifdef HEMELB_USE_VELOCITY_WEIGHTS_FILE
-							//JM File Inlets
-							((hemelb::lb::iolets::InOutLetFileVelocity*)inletValues->GetLocalIolet(tmp_iolet))->SetMaxSpeed(unitConverter->ConvertSpeedToLatticeUnits(tmp_velocity/(((hemelb::lb::iolets::InOutLetFileVelocity*)inletValues->GetLocalIolet(tmp_iolet))->weightAve)));
+						//JM File Inlets
+						//std::cout << "max speed is " << unitConverter->ConvertSpeedToPhysicalUnits(((hemelb::lb::iolets::InOutLetFileVelocity*)inletValues->GetLocalIolet(tmp_iolet))->GetMaxSpeed()) << std::endl;
+						//((hemelb::lb::iolets::InOutLetFileVelocity*)inletValues->GetLocalIolet(tmp_iolet))->SetMaxSpeed(unitConverter->ConvertSpeedToLatticeUnits(2.0*tmp_velocity));
+						((hemelb::lb::iolets::InOutLetFileVelocity*)inletValues->GetLocalIolet(tmp_iolet))->SetMaxSpeed(unitConverter->ConvertSpeedToLatticeUnits(tmp_velocity/(((hemelb::lb::iolets::InOutLetFileVelocity*)inletValues->GetLocalIolet(tmp_iolet))->weightAve)));
+						//std::cout << "max speed is " << unitConverter->ConvertSpeedToPhysicalUnits(((hemelb::lb::iolets::InOutLetFileVelocity*)inletValues->GetLocalIolet(tmp_iolet))->GetMaxSpeed()) << std::endl;
 #endif
 #ifndef HEMELB_USE_VELOCITY_WEIGHTS_FILE
-							//JM Parabolic (circular) inlets
-							((hemelb::lb::iolets::InOutLetParabolicVelocity*)inletValues->GetLocalIolet(tmp_iolet))->SetMaxSpeed(unitConverter->ConvertSpeedToLatticeUnits(2.0*tmp_velocity));
-#endif
-						}
+//						std::cout << "max speed is " << unitConverter->ConvertSpeedToPhysicalUnits(((hemelb::lb::iolets::InOutLetParabolicVelocity*)inletValues->GetLocalIolet(tmp_iolet))->GetMaxSpeed()) << std::endl;
+						//JM Parabolic (circular) inlets
+						((hemelb::lb::iolets::InOutLetParabolicVelocity*)inletValues->GetLocalIolet(tmp_iolet))->SetMaxSpeed(unitConverter->ConvertSpeedToLatticeUnits(2.0*tmp_velocity));
+						//((hemelb::lb::iolets::InOutLetParabolicVelocity*)inletValues->GetLocalIolet(tmp_iolet))->SetMaxSpeed(unitConverter->ConvertSpeedToLatticeUnits(tmp_velocity));
+						//std::cout << "max speed is " << unitConverter->ConvertSpeedToPhysicalUnits(((hemelb::lb::iolets::InOutLetParabolicVelocity*)inletValues->GetLocalIolet(tmp_iolet))->GetMaxSpeed()) << std::endl;
+						
+#endif 
+
 					}
-					//if (IsCurrentProcTheIOProc())
-					//{
-					//	int i = 0;
-					//	char hostname[256];
-					//	gethostname(hostname, sizeof(hostname));
-					//	printf("PID %d (%d) on %s ready for attach\n", getpid(), 1, hostname);
-					//	fflush(stdout);
-					//	while (0 == i)
-					//		sleep(5);
-					//}
 				}
 			}
 		}

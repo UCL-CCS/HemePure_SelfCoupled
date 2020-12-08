@@ -94,6 +94,7 @@ namespace hemelb
             * (latticeData->GetFNew(SimpleBounceBackDelegate<CollisionImpl>::GetBBIndex(site.GetIndex(),
                                                                                         ii))) =
                 //JM hydroVars.GetFPostCollision()[ii] - correction;
+
                 hydroVars.GetFPostCollision()[ii]*hydroVars.density - correction + hydroVars.forceDist.f[ii];
             
           }

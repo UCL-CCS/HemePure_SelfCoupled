@@ -114,6 +114,11 @@ class SimulationMaster
 			iolet2RankMap;
 		std::vector<std::vector<std::string> > couplingMap;
 
+		std::vector<double> Qbed, UdA, UdV, UdAold, UdVold;
+		std::vector<std::vector<double>> inletVelocity, outletPressure;
+		std::vector<int> nOutlets, nInlets, outletOrder, outletBedOrder,outletTotalOrder, inletOrder, inletBedOrder,inletTotalOrder;
+		int nBeds;
+
 		unsigned int imagesPerSimulation;
 		unsigned int imagesPeriod;
 		static const hemelb::LatticeTimeStep FORCE_FLUSH_PERIOD=1000;

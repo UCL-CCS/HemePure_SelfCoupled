@@ -76,7 +76,12 @@ namespace hemelb
 				/**
 				 * Return coupled fields.
 				 */
-				const std::unordered_map<int, std::vector<double> > GetCoupledFields() const
+				const std::unordered_map<int, std::vector<double> > GetCoupledFieldsHere() const
+				{
+					return coupledFieldsHere;
+				}
+				
+				const std::unordered_map<int, std::vector<double> > GetCoupledFieldsThere() const
 				{
 					return coupledFieldsThere;
 				}
@@ -212,6 +217,7 @@ namespace hemelb
 				 * Averaging only occurs on IO rank.
 				 */
 				std::unordered_map<int, std::vector<double> > coupledFields;
+				std::unordered_map<int, std::vector<double> > coupledFieldsHere;
 				std::unordered_map<int, std::vector<double> > coupledFieldsThere;
 
 				typedef hemelb::lb::lattices:: HEMELB_LATTICE latticeType;

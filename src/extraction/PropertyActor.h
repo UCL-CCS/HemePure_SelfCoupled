@@ -52,6 +52,8 @@ namespace hemelb
 				 */
 				bool GetCoupledFields(std::unordered_map<int, std::vector<double> >& coupledFields) const;
 
+				bool GetCoupledFields(std::unordered_map<int, std::vector<double> >& coupledFieldsHere, std::unordered_map<int, std::vector<double> >& coupledFieldsThere) const;
+
 				/**
 				 * Get unordered IOlet map.
 				 */

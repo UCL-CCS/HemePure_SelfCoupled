@@ -41,7 +41,7 @@ namespace hemelb
 				localPropertyOutputs[outputNumber]->Write((uint64_t) iterationNumber);
 			}
 		}
-
+		
 		bool PropertyWriter::GetCoupledFields(
 				unsigned long iterationNumber,
 				bool masterRank,
@@ -55,7 +55,33 @@ namespace hemelb
 				{
 					if (masterRank)
 					{
-						coupledFields = localPropertyOutputs[outputNumber]->GetCoupledFields();
+						coupledFields = localPropertyOutputs[outputNumber]->GetCoupledFieldsThere();
+					}
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+		}
+		
+		bool PropertyWriter::GetCoupledFields(
+				unsigned long iterationNumber,
+				bool masterRank,
+				std::unordered_map<int, std::vector<double> >& coupledFieldsHere,
+				std::unordered_map<int, std::vector<double> >& coupledFieldsThere) const
+		{
+			for (unsigned outputNumber = 0; outputNumber < localPropertyOutputs.size(); ++outputNumber)
+			{
+				if (
+						localPropertyOutputs[outputNumber]->Coupling() &&
+						localPropertyOutputs[outputNumber]->ShouldWrite(iterationNumber))
+				{
+					if (masterRank)
+					{
+						coupledFieldsHere = localPropertyOutputs[outputNumber]->GetCoupledFieldsHere();
+						coupledFieldsThere = localPropertyOutputs[outputNumber]->GetCoupledFieldsThere();
 					}
 					return true;
 				}

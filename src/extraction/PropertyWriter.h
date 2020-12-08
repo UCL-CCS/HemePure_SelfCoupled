@@ -54,6 +54,13 @@ namespace hemelb
 						bool masterRank,
 						std::unordered_map<int, std::vector<double> >& coupledFields) const;
 
+
+				bool GetCoupledFields(
+						unsigned long iterationNumber,
+						bool masterRank,
+						std::unordered_map<int, std::vector<double> >& coupledFieldsHere,
+						std::unordered_map<int, std::vector<double> >& coupledFieldsThere) const;
+
 				/**
 				 * Returns an unstructured IOlet map.
 				 * @return
