@@ -289,7 +289,7 @@ void SimulationMaster::Initialise() {
 			//JM Preliminary houskeeping and datastructures
 
 			// Get number of beds
-			nBeds = couplingMap.size()/2;
+			nBeds = couplingMap.size()/3;
 
 			// Get number of inlets/outlest for each Bed
 			nOutlets.resize(nBeds);  //Lattice = 0
@@ -311,10 +311,10 @@ void SimulationMaster::Initialise() {
 
 			for (int i = 0; i < nBeds; ++i)
 			{	
-				nOutlets[i] = (couplingMap[2*i].size() - 2)/3;
-				cumOutlets += (couplingMap[2*i].size() - 2)/3;
-				nInlets[i] = (couplingMap[2*i+1].size() - 2)/3;
-				cumInlets += (couplingMap[2*i+1].size() - 2)/3;
+				nOutlets[i] = (couplingMap[3*i].size() - 2)/3;
+				cumOutlets += (couplingMap[3*i].size() - 2)/3;
+				nInlets[i] = (couplingMap[3*i+1].size() - 2)/3;
+				cumInlets += (couplingMap[3*i+1].size() - 2)/3;
 
 				inletVelocity[i].resize(nInlets[i]);
 				outletPressure[i].resize(nOutlets[i]);
@@ -335,8 +335,8 @@ void SimulationMaster::Initialise() {
 				{
 					//outletBedOrder[k] = i;
 					//outletOrder[k] = j;
-					outletBedOrder[stoi(couplingMap[2*i][3*j+2])] = stoi(couplingMap[2*i][0]);
-					outletOrder[stoi(couplingMap[2*i][3*j+2])] = j;
+					outletBedOrder[stoi(couplingMap[3*i][3*j+2])] = stoi(couplingMap[3*i][0]);
+					outletOrder[stoi(couplingMap[3*i][3*j+2])] = j;
 					//outletTotalOrder[k] = stoi(couplingMap[3*i][3*j+2]);
 					k+=1;
 					
@@ -346,8 +346,8 @@ void SimulationMaster::Initialise() {
 				{
 					//inletBedOrder[kk] = i;
 					//inletOrder[kk] = j;
-					inletBedOrder[stoi(couplingMap[2*i+1][3*j+2])] = stoi(couplingMap[2*i+1][0]);
-					inletOrder[stoi(couplingMap[2*i+1][3*j+2])] = j;
+					inletBedOrder[stoi(couplingMap[3*i+1][3*j+2])] = stoi(couplingMap[3*i+1][0]);
+					inletOrder[stoi(couplingMap[3*i+1][3*j+2])] = j;
 					//inletTotalOrder[kk] = stoi(couplingMap[3*i+1][3*j+2]);
 					kk+=1;
 				}
@@ -554,16 +554,23 @@ void SimulationMaster::DoTimeStep() {
 						for (int j = 0; j < nOutlets[i]; ++j)
 						{
 							// Global IOlet ID.
-							iolet = stoi(couplingMap[2*i][3*j+2]);
+							iolet = stoi(couplingMap[3*i][3*j+2]);
 
 							// Voutlet = Vinlet/scaleFactor
-							tmpVel1 += coupledFieldsHere.at(iolet)[0]/stod(couplingMap[2*i][3*j+3]);
-							
-						
+							tmpVel1 += stod(couplingMap[3*i][3*j+3])*coupledFieldsHere.at(iolet)[0]*coupledFieldsHere.at(iolet)[0];
+							tmpVel2 += stod(couplingMap[3*i][3*j+3])*coupledFieldsHere.at(iolet)[0];
 							//std::cout << "Mesh 0 Step " << simulationState->GetTimeStep() << ", outlet " << iolet << " " << coupledFieldsHere.at(iolet)[0] << std::endl;		
 						}
 						UdAold[i] = UdA[i];
-				        	UdA[i] = tmpVel1/nOutlets[i];
+					//	UdA[i] = tmpVel1/tmpVel2;
+						if (tmpVel2 == 0)
+						{
+							UdA[i] = 0;
+						}
+					       	else
+						{
+							UdA[i] = tmpVel1/tmpVel2;
+						}
 					
 						tmpVel1 = 0;
 						tmpVel2 = 0;
@@ -571,16 +578,24 @@ void SimulationMaster::DoTimeStep() {
 						for (int j = 0; j < nInlets[i]; ++j)
 						{	
 							// Global IOlet ID.
-							iolet = stoi(couplingMap[2*i+1][3*j+2]);
+							iolet = stoi(couplingMap[3*i+1][3*j+2]);
 
 							// Voutlet = Vinlet/scaleFactor
-							tmpVel1 += coupledFieldsThere.at(iolet)[0]/stod(couplingMap[2*i+1][3*j+3]);
-							
+							tmpVel1 += stod(couplingMap[3*i+1][3*j+3])*coupledFieldsThere.at(iolet)[0]*coupledFieldsThere.at(iolet)[0];
+							tmpVel2 += stod(couplingMap[3*i+1][3*j+3])*coupledFieldsThere.at(iolet)[0];
 							
 							//std::cout << "Mesh 0 Step " << simulationState->GetTimeStep() << ", inlet " << iolet << " " << coupledFieldsThere.at(iolet)[0] << std::endl;		
 						}
 						UdVold[i] = UdV[i];
-						UdV[i] = tmpVel1/nInlets[i];
+						//UdV[i] = tmpVel1/tmpVel2;
+						if (tmpVel2 == 0)
+						{
+							UdV[i] = 0;
+						}
+					       	else
+						{
+							UdV[i] = tmpVel1/tmpVel2;
+						}
 						
 				
 					}
@@ -588,19 +603,69 @@ void SimulationMaster::DoTimeStep() {
 					//std::cout << "Mesh housekeeping at Step " << simulationState->GetTimeStep() << " on " << simConfig->GetLatticeId() << std::endl;
 					for (int i = 0; i < nBeds; ++i)
 					{
+						if (UdAold[i] < 1e-10 or UdVold[i] < 1e-10)
+						{
+							std::cout << "0: adjust for gradients" << std::endl;
+							UdAold[i] = UdA[i];
+							UdVold[i] = UdV[i];
+						//	Qbed[i] = UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4]));	
+						}
+				
+						//PhysUnits
+						
+						//0 tmpVel1 = UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])) + (stod(couplingMap[3*i+2][2]) + stod(couplingMap[3*i+2][1]))/(4.0*stod(couplingMap[3*i+2][3])) *((UdV[i] - UdVold[i])*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])) + (UdA[i] - UdAold[i])*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])))/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency))  ; //Qbed
+						
+						//1 tmpVel1 = UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4]));
+						//1 tmpVel2 = (stod(couplingMap[3*i+2][2]) + stod(couplingMap[3*i+2][1]))/(8.0*stod(couplingMap[3*i+2][3])) *((UdV[i] - UdVold[i])*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])) + (UdA[i] - UdAold[i])*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])))/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency))  ; //Qbed;
+
+						//tmpVel1 = std::min(UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])), UdA[i]*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])));
+						tmpVel1 = 0.5*(UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])) + UdA[i]*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])));
+						tmpVel2 = (stod(couplingMap[3*i+2][2]) + stod(couplingMap[3*i+2][1]))/(4.0*stod(couplingMap[3*i+2][3])) *(tmpVel1 - Qbed[i])/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency))  ; //Qbed;
+
+
+
+/* Original versions - pressure based, less LBM applicable.
+						//tmpVel1 = stod(couplingMap[3*i+2][3])*0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*(UdA[i]*UdA[i] - UdV[i]*UdV[i]);
+					
+						tmpVel1 = UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])) + stod(couplingMap[3*i+2][2]) * 0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*(UdV[i]*UdV[i] - UdVold[i]*UdVold[i])/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency))  ; //Qbed
+						
+
+						if (tmpVel1<0)
+						{
+							tmpVel1=0;
+							std::cout << "0: Zeroing bed flow"<<std::endl;
+						}
+							
+						tmpVel2 =  stod(couplingMap[3*i+2][1]) * (0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*(UdA[i]*UdA[i] - UdAold[i]*UdAold[i])/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency)));//QV_pt2
+						//tmpVel2 =  stod(couplingMap[3*i+2][1]) * (0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*(UdV[i]*UdV[i] - UdVold[i]*UdVold[i])/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency)) + (tmpVel1 - Qbed[i])/(stod(couplingMap[3*i+2][3]) * 2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency)) );//QV_pt2
+						
+						//tmpVel2=0;
+						if (tmpVel2<0)
+						{
+							//tmpVel2=0; //To zero the below
+							std::cout << "0: Zeroing bed flow pt 2"<<std::endl;
+						}
+						//std::cout << "Mesh 0 Bed = " << i << ", Qbed = " << tmpVel1 << ", Qbed old = " << Qbed[i] << std::endl;		*/
+						Qbed[i] = tmpVel1;
+
 						for (int j = 0; j < nOutlets[i]; ++j)
 						{ 
 							// Global IOlet ID.
-							iolet = stoi(couplingMap[2*i][3*j+2]);
+							iolet = stoi(couplingMap[3*i][3*j+2]);
 					   		//std::cout << "Outlet: " << iolet << std::endl;		
 					   	
-						
-							tmpVel = UdV[i]*stod(couplingMap[2*i][3*j+3])*stod(couplingMap[2*i][3*j+4]); 	
+							// Original - error: tmpVel = (tmpVel1 + tmpVel2)/(stod(couplingMap[3*i][3*j+3])*stod(couplingMap[3*i][3*j+4])); 
+							tmpVel = (tmpVel1 - tmpVel2)*stod(couplingMap[3*i][3*j+4])/stod(couplingMap[3*i][3*j+3]); 	
 
+							if ((tmpVel1-tmpVel2)<0)
+							{
+								tmpVel=0; //To zero the below
+								std::cout << "0: Zeroing bed flow pt 3"<<std::endl;
+							}
 							outletPressure[i][j] = 0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*tmpVel*tmpVel;
+							//outletPressure[i][j] = 0.5*tmpVel1/stod(couplingMap[3*i+2][3]);
 							
-							
-							std::cout << "0: Storing: Bed " << i << ", let " << iolet << ", pressure " << outletPressure[i][j] << "(vel = " << tmpVel << std::endl;
+							std::cout << "0: Storing: Bed " << i << ", let " << iolet << ", pressure " << outletPressure[i][j] << "(vel = " << tmpVel << ") from Qbed " << tmpVel1 << " and Qa " << tmpVel1-tmpVel2 << std::endl;
 						}
 					
 						
@@ -659,16 +724,26 @@ void SimulationMaster::DoTimeStep() {
 						for (int j = 0; j < nOutlets[i]; ++j)
 						{
 							// Global IOlet ID.
-							iolet = stoi(couplingMap[2*i][3*j+2]);
+							iolet = stoi(couplingMap[3*i][3*j+2]);
 
 							// Calculation for datum velocity
-							tmpVel1 += coupledFieldsThere.at(iolet)[0]/stod(couplingMap[2*i][3*j+3]);
+							tmpVel1 += stod(couplingMap[3*i][3*j+3])*coupledFieldsThere.at(iolet)[0]*coupledFieldsThere.at(iolet)[0];
+							tmpVel2 += stod(couplingMap[3*i][3*j+3])*coupledFieldsThere.at(iolet)[0];
 							
 							//std::cout << "Mesh 1 Step " << simulationState->GetTimeStep() << ", outlet " << iolet << " " << coupledFieldsThere.at(iolet)[0] << std::endl;		
 						}
 						UdAold[i] = UdA[i];
-						UdA[i] = tmpVel1/nOutlets[i];
-									
+						//UdA[i] = tmpVel1/tmpVel2;
+						if (tmpVel2 == 0)
+						{
+							UdA[i] = 0;
+						}
+					       	else
+						{
+							UdA[i] = tmpVel1/tmpVel2;
+						}
+					
+						
 						tmpVel1 = 0;
 						tmpVel2 = 0;
 
@@ -676,33 +751,93 @@ void SimulationMaster::DoTimeStep() {
 						{
 						//	std::cout << "Mesh 1 Bed " <<  i << ", nInlet " << nInlets[i] << " inlet " << j << std::endl;		
 							// Global IOlet ID.
-							iolet = stoi(couplingMap[2*i+1][3*j+2]);
+							iolet = stoi(couplingMap[3*i+1][3*j+2]);
 
 							// Calculation for datum velocity
-							tmpVel1 += coupledFieldsHere.at(iolet)[0]/stod(couplingMap[2*i+1][3*j+3]);
-							
+							tmpVel1 += stod(couplingMap[3*i+1][3*j+3])*coupledFieldsHere.at(iolet)[0]*coupledFieldsHere.at(iolet)[0];
+							tmpVel2 += stod(couplingMap[3*i+1][3*j+3])*coupledFieldsHere.at(iolet)[0];
 							
 							//std::cout << "Mesh 1 Step " << simulationState->GetTimeStep() << ", inlet " << iolet << " " << coupledFieldsHere.at(iolet)[0] << std::endl;		
 
 						}
 						UdVold[i] = UdV[i];
-						UdV[i] = tmpVel1/nInlets[i];
+						//UdV[i] = tmpVel1/tmpVel2;
+						if (tmpVel2 == 0)
+						{
+							UdV[i] = 0;
+						}
+					       	else
+						{
+							UdV[i] = tmpVel1/tmpVel2;
+						}
 					}
 			
 					//std::cout << "Mesh housekeeping at Step " << simulationState->GetTimeStep() << " on " << simConfig->GetLatticeId() << std::endl;
 					
 					for (int i = 0; i < nBeds; ++i)
-					{	
+					{
+						if (UdAold[i] < 1e-10 or UdVold[i] < 1e-10)
+						{
+							std::cout << "1: adjust for gradients" << std::endl;
+							UdAold[i] = UdA[i];
+							UdVold[i] = UdV[i];
+						//	Qbed[i] = UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4]));	
+						}
+						
+						
+						//0 tmpVel1 = UdA[i]*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])) - (stod(couplingMap[3*i+2][1]) + stod(couplingMap[3*i+2][2]))/(4.0*stod(couplingMap[3*i+2][3])) *((UdV[i] - UdVold[i])*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])) + (UdA[i] - UdAold[i])*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])))/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency))  ; //Qbed
+						//1 tmpVel1 = UdA[i]*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4]));
+						//1 tmpVel2 = (stod(couplingMap[3*i+2][1]) + stod(couplingMap[3*i+2][2]))/(8.0*stod(couplingMap[3*i+2][3])) *((UdV[i] - UdVold[i])*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])) + (UdA[i] - UdAold[i])*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])))/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency))  ; //Qbed
+
+						//tmpVel1 = std::min(UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])), UdA[i]*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])));
+						tmpVel1 = 0.5*(UdV[i]*(stod(couplingMap[3*i+1][3])/stod(couplingMap[3*i+1][4])) + UdA[i]*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])));
+						tmpVel2 = (stod(couplingMap[3*i+2][2]) + stod(couplingMap[3*i+2][1]))/(4.0*stod(couplingMap[3*i+2][3])) *(tmpVel1 - Qbed[i])/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency))  ; //Qbed;
+
+
+
+/* Original approaches on pressure basis - less LBM applicable
+ *
+						//tmpVel1 = stod(couplingMap[3*i+2][3])*0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*(UdA[i]*UdA[i] - UdV[i]*UdV[i]);
+						
+						
+						tmpVel1 = UdA[i]*(stod(couplingMap[3*i][3])/stod(couplingMap[3*i][4])) - stod(couplingMap[3*i+2][1]) * 0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*(UdA[i]*UdA[i] - UdAold[i]*UdAold[i])/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency))  ; //Qbed
+						
+
+						if (tmpVel1<0)
+						{
+							tmpVel1=0;
+							std::cout << "1: Zeroing bed flow"<<std::endl;
+						}
+						
+						tmpVel2 =  stod(couplingMap[3*i+2][2]) * (0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*(UdV[i]*UdV[i] - UdVold[i]*UdVold[i])/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency)));//QV_pt2
+						//tmpVel2 =  stod(couplingMap[3*i+2][2]) * (0.5*hemelb::BLOOD_DENSITY_Kg_per_m3*(UdA[i]*UdA[i] - UdAold[i]*UdAold[i])/(2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency)) - (tmpVel1 - Qbed[i])/(stod(couplingMap[3*i+2][3]) * 2.0*unitConverter->ConvertTimeToPhysicalUnits(simConfig->GetPropertyOutput(0)->frequency)) );//QV_pt2
+					
+
+//						std::cout << "Mesh 1 Bed = " << i << ", Qbed = " << tmpVel1 << ", Qbed old = " << Qbed[i] << std::endl;		
+						//tmpVel2=0;
+						if (tmpVel2<0)
+						{
+							//tmpVel2=0; //To zero the below.
+							std::cout << "1: Zeroing bed flowi pt2"<<std::endl;
+						}
+*/						
+						Qbed[i] = tmpVel1;
+						
 						for (int j = 0; j < nInlets[i]; ++j)
 						{
 							// Global IOlet ID.
-							iolet = stoi(couplingMap[2*i+1][3*j+2]);
+							iolet = stoi(couplingMap[3*i+1][3*j+2]);
 							
 					   		//std::cout << "Inlet: " << iolet << " ij " << i << " " << j << "  at line " << 3*i+1 << " element " << 3*j+2 << std::endl;		
 					   		
 							// original error: inletVelocity[i][j] = (tmpVel1 - tmpVel2)/(stod(couplingMap[3*i+1][3*j+3])*stod(couplingMap[3*i+1][3*j+4]));						
-							inletVelocity[i][j] = UdA[i]*stod(couplingMap[2*i+1][3*j+3])*stod(couplingMap[2*i+1][3*j+4]);							
-							std::cout << "1: Storing: Bed " << i << ", iolet " << iolet << ", velocity " << inletVelocity[i][j] << std::endl;
+							inletVelocity[i][j] = (tmpVel1 + tmpVel2)*stod(couplingMap[3*i+1][3*j+4])/stod(couplingMap[3*i+1][3*j+3]);							
+							if ((tmpVel1+tmpVel2)<0)
+							{
+								inletVelocity[i][j] = 0; //To zero the below.
+								std::cout << "1: Zeroing bed flowi pt3"<<std::endl;
+							}									
+							std::cout << "1: Storing: Bed " << i << ", iolet " << iolet << ", velocity " << inletVelocity[i][j] << " from Qbed " << tmpVel1 << " and Qv " << tmpVel1 + tmpVel2 << std::endl;
 						}
 
 						
